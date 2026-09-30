@@ -1,0 +1,42 @@
+export const initialData = [
+  {
+    id: 1,
+    categoria: "Clientes",
+    nome: "Empresa Exemplo",
+    documento: "12.345.678/0001-90",
+    responsavel: "João Silva",
+    telefone: "(11) 99999-9999",
+    email: "contato@exemplo.com",
+    endereco: "São Paulo - SP",
+    status: "Ativo",
+    sub: "",
+  },
+  {
+    id: 2,
+    categoria: "Licenças",
+    nome: "Licença de Operação",
+    tipo: "LO",
+    numero: "LO-2026-001",
+    cliente: "Empresa Exemplo",
+    orgao: "Órgão Ambiental",
+    emissao: "2026-01-10",
+    vencimento: "2027-01-10",
+    status: "Aprovada",
+    sub: "LO LO-2026-001",
+  },
+  {
+    id: 3,
+    categoria: "Agenda Ambiental",
+    nome: "Vistoria ambiental",
+    tipo: "Vistoria",
+    data: "2026-10-05",
+    horario: "09:00",
+    local: "Unidade industrial",
+    responsavel: "João Silva",
+    descricao: "Vistoria periódica da unidade.",
+    status: "Confirmado",
+    sub: "Vistoria periódica da unidade.",
+  },
+];
+
+export default initialData;
