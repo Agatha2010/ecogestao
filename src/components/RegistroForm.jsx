@@ -1,5 +1,30 @@
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+
+const vazio = {
+  nome: "",
+  tipo: "Pessoa Física",
+  documento: "",
+  responsavel: "",
+  telefone: "",
+  email: "",
+  endereco: "",
+  cidade: "",
+  estado: "",
+  observacoes: "",
+  tipoRegistro: "",
+  numero: "",
+  cliente: "",
+  orgao: "",
+  emissao: "",
+  vencimento: "",
+  data: "",
+  horario: "",
+  local: "",
+  descricao: "",
+  status: "Ativo",
+  sub: "",
+};
 
 export default function RegistroForm({
   name,
@@ -9,384 +34,463 @@ export default function RegistroForm({
 }) {
   const isCliente = name === "Clientes";
   const isLicenca = name === "Licenças";
-  const isAgenda =
-    name === "Agenda Ambiental" || name === "Agenda";
+  const isAgenda = name === "Agenda Ambiental";
 
-  const [form, setForm] = useState({
-    nome: "",
-    documento: "",
-    responsavel: "",
-    telefone: "",
-    email: "",
-    endereco: "",
-    tipo: "",
-    numero: "",
-    cliente: "",
-    orgao: "",
-    emissao: "",
-    vencimento: "",
-    data: "",
-    horario: "",
-    local: "",
-    descricao: "",
-    status: "Pendente",
-    sub: "",
-  });
+  const [form, setForm] = useState({ ...vazio });
+  const [erros, setErros] = useState({});
+  const [salvando, setSalvando] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState("");
 
   useEffect(() => {
     if (initialData) {
-      setForm((atual) => ({
-        ...atual,
+      setForm({
+        ...vazio,
         ...initialData,
-      }));
+        nome: initialData.nome || initialData.titulo || "",
+        documento:
+          initialData.documento || initialData.cpf_cnpj || "",
+        data:
+          initialData.data || initialData.data_evento || "",
+        horario:
+          initialData.horario || initialData.hora_inicio || "",
+        emissao:
+          initialData.emissao || initialData.data_emissao || "",
+        vencimento:
+          initialData.vencimento || initialData.data_validade || "",
+      });
     } else {
       setForm({
-        nome: "",
-        documento: "",
-        responsavel: "",
-        telefone: "",
-        email: "",
-        endereco: "",
-        tipo: "",
-        numero: "",
-        cliente: "",
-        orgao: "",
-        emissao: "",
-        vencimento: "",
-        data: "",
-        horario: "",
-        local: "",
-        descricao: "",
-        status: "Pendente",
-        sub: "",
+        ...vazio,
+        status: isCliente ? "Ativo" : "Pendente",
       });
     }
-  }, [initialData]);
+
+    setErros({});
+    setErroEnvio("");
+  }, [initialData, name, isCliente]);
 
   function atualizar(campo, valor) {
     setForm((atual) => ({
       ...atual,
       [campo]: valor,
     }));
+
+    setErros((atuais) => ({
+      ...atuais,
+      [campo]: "",
+    }));
+
+    setErroEnvio("");
   }
 
-  function handleSubmit(e) {
-    e.preventDefault();
+  function campo(rotulo, chave, props = {}) {
+    const id = `campo-${chave}`;
+    const { className = "", ...inputProps } = props;
+
+    return (
+      <label className="form-field" htmlFor={id}>
+        <span>{rotulo}</span>
+        <input
+          id={id}
+          name={chave}
+          value={form[chave] ?? ""}
+          onChange={(e) => atualizar(chave, e.target.value)}
+          aria-invalid={Boolean(erros[chave])}
+          aria-describedby={erros[chave] ? `${id}-erro` : undefined}
+          className={`${className} ${erros[chave] ? "campo-invalido" : ""}`}
+          {...inputProps}
+        />
+        {erros[chave] && (
+          <small className="mensagem-erro" id={`${id}-erro`}>
+            {erros[chave]}
+          </small>
+        )}
+      </label>
+    );
+  }
+
+  function areaTexto(rotulo, chave, linhas = 3) {
+    const id = `campo-${chave}`;
+
+    return (
+      <label className="form-field" htmlFor={id}>
+        <span>{rotulo}</span>
+        <textarea
+          id={id}
+          name={chave}
+          value={form[chave] ?? ""}
+          onChange={(e) => atualizar(chave, e.target.value)}
+          rows={linhas}
+          aria-invalid={Boolean(erros[chave])}
+          aria-describedby={erros[chave] ? `${id}-erro` : undefined}
+          className={erros[chave] ? "campo-invalido" : ""}
+        />
+        {erros[chave] && (
+          <small className="mensagem-erro" id={`${id}-erro`}>
+            {erros[chave]}
+          </small>
+        )}
+      </label>
+    );
+  }
+
+  function campoSelect(rotulo, chave, opcoes) {
+    const id = `campo-${chave}`;
+
+    return (
+      <label className="form-field" htmlFor={id}>
+        <span>{rotulo}</span>
+        <select
+          id={id}
+          name={chave}
+          value={form[chave] ?? ""}
+          onChange={(e) => atualizar(chave, e.target.value)}
+          aria-invalid={Boolean(erros[chave])}
+        >
+          {opcoes.map((opcao) => (
+            <option key={opcao.value} value={opcao.value}>
+              {opcao.label}
+            </option>
+          ))}
+        </select>
+        {erros[chave] && (
+          <small className="mensagem-erro">{erros[chave]}</small>
+        )}
+      </label>
+    );
+  }
+
+  function validar() {
+    const novosErros = {};
+
+    if (!form.nome.trim()) {
+      novosErros.nome = isAgenda
+        ? "Informe o título do compromisso."
+        : "Informe o nome.";
+    }
 
     if (isAgenda) {
-      if (!form.nome.trim()) {
-        alert("Informe o título do compromisso.");
-        return;
-      }
-
       if (!form.data) {
-        alert("Informe a data do compromisso.");
-        return;
+        novosErros.data = "Informe a data.";
       }
 
       if (!form.horario) {
-        alert("Informe o horário.");
-        return;
+        novosErros.horario = "Informe o horário.";
       }
     }
 
-    if (isCliente && !form.nome.trim()) {
-      alert("Informe o nome do cliente.");
-      return;
-    }
-
-    if (isLicenca && !form.nome.trim()) {
-      alert("Informe o nome da licença.");
-      return;
-    }
-
-    if (isLicenca && form.emissao && form.vencimento) {
-      if (form.vencimento < form.emissao) {
-        alert("O vencimento não pode ser anterior à emissão.");
-        return;
+    if (isLicenca) {
+      if (
+        form.emissao &&
+        form.vencimento &&
+        form.vencimento < form.emissao
+      ) {
+        novosErros.vencimento =
+          "O vencimento não pode ser anterior à emissão.";
       }
     }
 
-    const registro = {
+    if (form.email.trim()) {
+      const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        form.email.trim()
+      );
+
+      if (!emailValido) {
+        novosErros.email = "Digite um e-mail válido.";
+      }
+    }
+
+    if (form.estado.trim() && form.estado.trim().length !== 2) {
+      novosErros.estado = "Informe a UF com 2 letras.";
+    }
+
+    setErros(novosErros);
+    return Object.keys(novosErros).length === 0;
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErroEnvio("");
+
+    if (!validar()) {
+      return;
+    }
+
+    const payload = {
       ...form,
       nome: form.nome.trim(),
+      categoria: name,
+      documento: form.documento.trim(),
+      email: form.email.trim(),
+      estado: form.estado.trim().toUpperCase(),
       sub: isAgenda
         ? form.descricao
         : isLicenca
-        ? `${form.tipo} ${form.numero}`.trim()
+        ? `${form.tipoRegistro} ${form.numero}`.trim()
         : form.sub,
-      categoria: isAgenda
-        ? "Agenda Ambiental"
-        : isLicenca
-        ? "Licenças"
-        : isCliente
-        ? "Clientes"
-        : name,
     };
 
-    onSave(registro);
+    try {
+      setSalvando(true);
+      await onSave(payload);
+    } catch (erro) {
+      setErroEnvio(
+        erro?.message ||
+          "Não foi possível salvar. Verifique sua conexão e tente novamente."
+      );
+    } finally {
+      setSalvando(false);
+    }
   }
 
   return (
-    <form className="registro-form" onSubmit={handleSubmit}>
-      <h2>
-        {initialData ? "Editar" : "Novo cadastro"} - {name}
-      </h2>
+    <form className="registro-form" onSubmit={handleSubmit} noValidate>
+      <div className="form-header">
+        <div>
+          <span className="form-eyebrow">
+            {initialData ? "ATUALIZAÇÃO" : "NOVO REGISTRO"}
+          </span>
+          <h2>
+            {initialData ? "Editar cadastro" : "Novo cadastro"}
+          </h2>
+          <p>{name}</p>
+        </div>
 
-      {isAgenda ? (
+        <button
+          type="button"
+          className="form-fechar"
+          onClick={onCancel}
+          aria-label="Fechar formulário"
+          disabled={salvando}
+        >
+          ×
+        </button>
+      </div>
+
+      {isCliente && (
         <>
-          <label>Título do compromisso *</label>
-          <input
-            value={form.nome}
-            onChange={(e) => atualizar("nome", e.target.value)}
-            placeholder="Ex.: Vistoria ambiental"
-            required
-          />
+          <div className="form-section">
+            <h3>Dados do cliente</h3>
+            <div className="form-grid">
+              {campo("Nome do cliente *", "nome", {
+                required: true,
+                placeholder: "Nome completo ou razão social",
+                className: "campo-largo",
+              })}
 
-          <label>Tipo de compromisso</label>
-          <select
-            value={form.tipo}
-            onChange={(e) => atualizar("tipo", e.target.value)}
-          >
-            <option value="">Selecione</option>
-            <option value="Reunião">Reunião</option>
-            <option value="Vistoria">Vistoria</option>
-            <option value="Auditoria">Auditoria</option>
-            <option value="Entrega de documento">
-              Entrega de documento
-            </option>
-            <option value="Prazo ambiental">Prazo ambiental</option>
-            <option value="Outro">Outro</option>
-          </select>
+              {campoSelect("Tipo de pessoa", "tipo", [
+                { value: "Pessoa Física", label: "Pessoa Física" },
+                { value: "Pessoa Jurídica", label: "Pessoa Jurídica" },
+              ])}
 
-          <div className="form-grid">
-            <div>
-              <label>Data *</label>
-              <input
-                type="date"
-                value={form.data}
-                onChange={(e) => atualizar("data", e.target.value)}
-                required
-              />
-            </div>
+              {campo("CPF/CNPJ", "documento", {
+                placeholder: "Digite o documento",
+              })}
 
-            <div>
-              <label>Horário *</label>
-              <input
-                type="time"
-                value={form.horario}
-                onChange={(e) => atualizar("horario", e.target.value)}
-                required
-              />
+              {campo("Responsável", "responsavel", {
+                placeholder: "Nome do responsável",
+              })}
             </div>
           </div>
 
-          <label>Local</label>
-          <input
-            value={form.local}
-            onChange={(e) => atualizar("local", e.target.value)}
-            placeholder="Endereço ou local do compromisso"
-          />
+          <div className="form-section">
+            <h3>Contato</h3>
+            <div className="form-grid">
+              {campo("Telefone", "telefone", {
+                type: "tel",
+                placeholder: "(00) 00000-0000",
+              })}
 
-          <label>Responsável</label>
-          <input
-            value={form.responsavel}
-            onChange={(e) =>
-              atualizar("responsavel", e.target.value)
-            }
-            placeholder="Nome do responsável"
-          />
+              {campo("E-mail", "email", {
+                type: "email",
+                placeholder: "email@exemplo.com",
+              })}
 
-          <label>Descrição</label>
-          <textarea
-            value={form.descricao}
-            onChange={(e) =>
-              atualizar("descricao", e.target.value)
-            }
-            placeholder="Detalhes do compromisso..."
-            rows="4"
-          />
+              {campo("Endereço", "endereco", {
+                placeholder: "Rua, número e complemento",
+                className: "campo-largo",
+              })}
 
-          <label>Status</label>
-          <select
-            value={form.status}
-            onChange={(e) => atualizar("status", e.target.value)}
-          >
-            <option value="Pendente">Pendente</option>
-            <option value="Confirmado">Confirmado</option>
-            <option value="Concluído">Concluído</option>
-            <option value="Cancelado">Cancelado</option>
-          </select>
-        </>
-      ) : isCliente ? (
-        <>
-          <label>Nome do cliente *</label>
-          <input
-            value={form.nome}
-            onChange={(e) => atualizar("nome", e.target.value)}
-            required
-          />
+              {campo("Cidade", "cidade", {
+                placeholder: "Cidade",
+              })}
 
-          <label>CNPJ / CPF</label>
-          <input
-            value={form.documento}
-            onChange={(e) =>
-              atualizar("documento", e.target.value)
-            }
-          />
-
-          <label>Responsável</label>
-          <input
-            value={form.responsavel}
-            onChange={(e) =>
-              atualizar("responsavel", e.target.value)
-            }
-          />
-
-          <label>Telefone</label>
-          <input
-            value={form.telefone}
-            onChange={(e) =>
-              atualizar("telefone", e.target.value)
-            }
-          />
-
-          <label>E-mail</label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => atualizar("email", e.target.value)}
-          />
-
-          <label>Endereço</label>
-          <input
-            value={form.endereco}
-            onChange={(e) =>
-              atualizar("endereco", e.target.value)
-            }
-          />
-
-          <label>Status</label>
-          <select
-            value={form.status}
-            onChange={(e) => atualizar("status", e.target.value)}
-          >
-            <option value="Ativo">Ativo</option>
-            <option value="Inativo">Inativo</option>
-          </select>
-        </>
-      ) : isLicenca ? (
-        <>
-          <label>Nome da licença *</label>
-          <input
-            value={form.nome}
-            onChange={(e) => atualizar("nome", e.target.value)}
-            placeholder="Ex.: Licença de Operação"
-            required
-          />
-
-          <label>Tipo</label>
-          <select
-            value={form.tipo}
-            onChange={(e) => atualizar("tipo", e.target.value)}
-          >
-            <option value="">Selecione</option>
-            <option value="LP">Licença Prévia (LP)</option>
-            <option value="LI">Licença de Instalação (LI)</option>
-            <option value="LO">Licença de Operação (LO)</option>
-            <option value="Autorização">Autorização</option>
-            <option value="Outro">Outro</option>
-          </select>
-
-          <label>Número</label>
-          <input
-            value={form.numero}
-            onChange={(e) => atualizar("numero", e.target.value)}
-          />
-
-          <label>Cliente</label>
-          <input
-            value={form.cliente}
-            onChange={(e) => atualizar("cliente", e.target.value)}
-            placeholder="Nome do cliente"
-          />
-
-          <label>Órgão ambiental</label>
-          <input
-            value={form.orgao}
-            onChange={(e) => atualizar("orgao", e.target.value)}
-          />
-
-          <div className="form-grid">
-            <div>
-              <label>Emissão</label>
-              <input
-                type="date"
-                value={form.emissao}
-                onChange={(e) =>
-                  atualizar("emissao", e.target.value)
-                }
-              />
-            </div>
-
-            <div>
-              <label>Vencimento</label>
-              <input
-                type="date"
-                value={form.vencimento}
-                onChange={(e) =>
-                  atualizar("vencimento", e.target.value)
-                }
-              />
+              {campo("Estado (UF)", "estado", {
+                maxLength: 2,
+                placeholder: "UF",
+              })}
             </div>
           </div>
 
-          <label>Status</label>
-          <select
-            value={form.status}
-            onChange={(e) => atualizar("status", e.target.value)}
-          >
-            <option value="Pendente">Pendente</option>
-            <option value="Em análise">Em análise</option>
-            <option value="Aprovada">Aprovada</option>
-            <option value="Vencida">Vencida</option>
-          </select>
-        </>
-      ) : (
-        <>
-          <label>Nome *</label>
-          <input
-            value={form.nome}
-            onChange={(e) => atualizar("nome", e.target.value)}
-            required
-          />
-
-          <label>Descrição</label>
-          <textarea
-            value={form.sub}
-            onChange={(e) => atualizar("sub", e.target.value)}
-            rows="3"
-          />
-
-          <label>Status</label>
-          <select
-            value={form.status}
-            onChange={(e) => atualizar("status", e.target.value)}
-          >
-            <option value="Pendente">Pendente</option>
-            <option value="Ativo">Ativo</option>
-            <option value="Concluído">Concluído</option>
-          </select>
+          <div className="form-section">
+            <h3>Informações adicionais</h3>
+            {areaTexto("Observações", "observacoes")}
+            {campoSelect("Status", "status", [
+              { value: "Ativo", label: "Ativo" },
+              { value: "Inativo", label: "Inativo" },
+            ])}
+          </div>
         </>
       )}
 
+      {isLicenca && (
+        <>
+          <div className="form-section">
+            <h3>Identificação da licença</h3>
+            <div className="form-grid">
+              {campo("Nome da licença *", "nome", {
+                required: true,
+                placeholder: "Ex.: Licença de operação",
+                className: "campo-largo",
+              })}
+
+              {campoSelect("Tipo", "tipoRegistro", [
+                { value: "", label: "Selecione" },
+                { value: "LP", label: "Licença Prévia (LP)" },
+                { value: "LI", label: "Licença de Instalação (LI)" },
+                { value: "LO", label: "Licença de Operação (LO)" },
+                { value: "Autorização", label: "Autorização" },
+                { value: "Outro", label: "Outro" },
+              ])}
+
+              {campo("Número", "numero", {
+                placeholder: "Número do documento",
+              })}
+
+              {campo("Cliente", "cliente", {
+                placeholder: "Nome do cliente",
+              })}
+
+              {campo("Órgão ambiental", "orgao", {
+                placeholder: "Ex.: IBAMA",
+                className: "campo-largo",
+              })}
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h3>Prazos e situação</h3>
+            <div className="form-grid">
+              {campo("Data de emissão", "emissao", {
+                type: "date",
+              })}
+
+              {campo("Data de vencimento", "vencimento", {
+                type: "date",
+              })}
+            </div>
+
+            {campoSelect("Status", "status", [
+              { value: "Pendente", label: "Pendente" },
+              { value: "Em análise", label: "Em análise" },
+              { value: "Aprovada", label: "Aprovada" },
+              { value: "Vencida", label: "Vencida" },
+            ])}
+          </div>
+        </>
+      )}
+
+      {isAgenda && (
+        <>
+          <div className="form-section">
+            <h3>Dados do compromisso</h3>
+            <div className="form-grid">
+              {campo("Título do compromisso *", "nome", {
+                required: true,
+                placeholder: "Ex.: Vistoria ambiental",
+                className: "campo-largo",
+              })}
+
+              {campoSelect("Tipo", "tipo", [
+                { value: "", label: "Selecione" },
+                ...[
+                  "Reunião",
+                  "Vistoria",
+                  "Auditoria",
+                  "Entrega de documento",
+                  "Prazo ambiental",
+                  "Outro",
+                ].map((v) => ({ value: v, label: v })),
+              ])}
+
+              {campo("Data *", "data", {
+                type: "date",
+                required: true,
+              })}
+
+              {campo("Horário *", "horario", {
+                type: "time",
+                required: true,
+              })}
+
+              {campo("Local", "local", {
+                placeholder: "Endereço ou local",
+                className: "campo-largo",
+              })}
+
+              {campo("Responsável", "responsavel", {
+                placeholder: "Pessoa responsável",
+              })}
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h3>Detalhes</h3>
+            {areaTexto("Descrição", "descricao")}
+            {campoSelect("Status", "status", [
+              { value: "Pendente", label: "Pendente" },
+              { value: "Confirmado", label: "Confirmado" },
+              { value: "Concluído", label: "Concluído" },
+              { value: "Cancelado", label: "Cancelado" },
+            ])}
+          </div>
+        </>
+      )}
+
+      {!isCliente && !isLicenca && !isAgenda && (
+        <div className="form-section">
+          <h3>Informações do registro</h3>
+          {campo("Nome *", "nome", {
+            required: true,
+            placeholder: "Digite o nome",
+          })}
+
+          {areaTexto("Descrição", "sub")}
+
+          {campoSelect("Status", "status", [
+            { value: "Pendente", label: "Pendente" },
+            { value: "Ativo", label: "Ativo" },
+            { value: "Concluído", label: "Concluído" },
+          ])}
+        </div>
+      )}
+
+      {erroEnvio && (
+        <div className="form-alerta" role="alert">
+          {erroEnvio}
+        </div>
+      )}
+
       <div className="form-actions">
-        <button type="submit">
-          {initialData ? "Salvar alterações" : "Cadastrar"}
+        <button
+          type="button"
+          className="btn-cancelar"
+          onClick={onCancel}
+          disabled={salvando}
+        >
+          Cancelar
         </button>
 
-        <button type="button" onClick={onCancel}>
-          Cancelar
+        <button
+          type="submit"
+          className="btn-salvar"
+          disabled={salvando}
+        >
+          {salvando
+            ? "Salvando..."
+            : initialData
+            ? "Salvar alterações"
+            : "Cadastrar"}
         </button>
       </div>
     </form>

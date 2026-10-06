@@ -1,89 +1,41 @@
-import React from "react";
-const itens = [
-  { nome: "Visão geral", simbolo: "📜" },
-  { nome: "Clientes", simbolo: "👥" },
-  { nome: "Licenças", simbolo: "📄" },
-  { nome: "Protocolos", simbolo: "📑" },
-  { nome: "Agenda", simbolo: "📅" },
-  { nome: "Financeiro", simbolo: "💰" },
-  { nome: "Espécies vegetais", simbolo: "🌱" },
-  { nome: "Análises", simbolo: "🔬" },
-  { nome: "Ofícios", simbolo: "📮" },
-];
+import React from 'react';
+import { NavLink } from 'react-router-dom';
 
-const preferencias = [
-  { nome: "Meu perfil", simbolo: "👤" },
-  { nome: "Configurações", simbolo: "⚙️" },
-];
-
-export default function Sidebar({ pagina, setPagina }) {
-  function selecionar(nome) {
-    const destino = nome === "Visão geral" ? "Dashboard" :
-      nome === "Agenda" ? "Agenda Ambiental" : nome;
-    setPagina(destino);
-  }
-
-  function ativo(nome) {
-    if (nome === "Visão geral") return pagina === "Dashboard";
-    if (nome === "Agenda") return pagina === "Agenda Ambiental";
-    return pagina === nome;
-  }
+export default function Sidebar() {
+  const links = [
+    { to: '/', label: 'Dashboard', icon: '📊', end: true },
+    { to: '/clientes', label: 'Clientes', icon: '👥' },
+    { to: '/licencas', label: 'Licenças', icon: '📜' },
+    { to: '/protocolos', label: 'Protocolos', icon: '📋' },
+    { to: '/oficios', label: 'Ofícios', icon: '📄' },
+    { to: '/analises', label: 'Análises', icon: '🔬' },
+    { to: '/especies', label: 'Espécies', icon: '🌱' },
+    { to: '/agenda', label: 'Agenda', icon: '📅' },
+    { to: '/financeiro', label: 'Pagamentos', icon: '💰' },
+    { to: '/configuracoes', label: 'Configurações', icon: '⚙️' }
+  ];
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand">
-        <div className="brand-icon">♧</div>
+      <div className="sidebar-logo">
+        <div className="logo-icon">🌿</div>
         <div>
-          <strong>ecogestão</strong>
-          <small>GESTÃO AMBIENTAL</small>
+          <h2>EcoGestão</h2>
+          <span className="subtitulo">Gestão ambiental</span>
         </div>
       </div>
 
-      <button
-        className="workspace-card"
-        type="button"
-        onClick={() => selecionar("Visão geral")}
-      >
-        <span className="workspace-icon">EC</span>
-        <span className="workspace-text">
-          <strong>Eco Consultoria</strong>
-          <small>Espaço de trabalho</small>
-        </span>
-        <span className="workspace-arrow">›</span>
-      </button>
-
-      <div className="sidebar-heading">MENU PRINCIPAL</div>
-
-      <nav className="sidebar-nav">
-        {itens.map((item) => (
-          <button
-            key={item.nome}
-            type="button"
-            className={`sidebar-link ${ativo(item.nome) ? "active" : ""}`}
-            onClick={() => selecionar(item.nome)}
+      <nav>
+        {links.map(link => (
+          <NavLink
+            key={link.to}
+            to={link.to}
+            end={link.end}
+            className={({ isActive }) => (isActive ? 'active' : '')}
           >
-            <span className="sidebar-symbol">{item.simbolo}</span>
-            <span>{item.nome}</span>
-            {ativo(item.nome) && <span className="active-dot" />}
-          </button>
-        ))}
-      </nav>
-
-      <div className="sidebar-heading preferences-heading">
-        PREFERÊNCIAS
-      </div>
-
-      <nav className="sidebar-nav">
-        {preferencias.map((item) => (
-          <button
-            key={item.nome}
-            type="button"
-            className={`sidebar-link ${pagina === item.nome ? "active" : ""}`}
-            onClick={() => selecionar(item.nome)}
-          >
-            <span className="sidebar-symbol">{item.simbolo}</span>
-            <span>{item.nome}</span>
-          </button>
+            <span className="icon">{link.icon}</span>
+            {link.label}
+          </NavLink>
         ))}
       </nav>
     </aside>
