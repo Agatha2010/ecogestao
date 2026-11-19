@@ -22,13 +22,13 @@ import Logs from './pages/Logs';
 
 function RotaProtegida({ children }) {
   const { usuarioAtual, loading } = useAuth();
-  
+
   if (loading) return <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>Carregando...</div>;
-  
+
   if (!usuarioAtual) {
     return <Navigate to="/login" replace />;
   }
-  
+
   return children;
 }
 
@@ -38,7 +38,6 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rota pública */}
         <Route path="/login" element={
           usuarioAtual ? <Navigate to="/" replace /> : <Login />
         } />
@@ -50,7 +49,7 @@ export default function App() {
               <Sidebar />
               <main className="main-content">
                 <Routes>
-                 <Route path="/logs" element={<Logs />} />
+                  <Route path="/logs" element={<Logs />} />
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/clientes" element={<Listing />} />
                   <Route path="/licencas" element={<Licencas />} />

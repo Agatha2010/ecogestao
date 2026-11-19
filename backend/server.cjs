@@ -14,15 +14,7 @@ app.use(express.json());
 // STATUS E PÁGINA INICIAL
 // ==================================================
 app.get("/", (req, res) => {
-  res.send(`
-    <h1>EcoGestão API</h1>
-    <p>Servidor funcionando. Rotas disponíveis:</p>
-    <ul>
-      <li><a href="/api/status">Status do MySQL</a></li>
-      <li><a href="/api/clientes">Clientes</a></li>
-      <li><a href="/api/logs">Logs</a></li>
-    </ul>
-  `);
+  res.send(`<h1>EcoGestão API</h1><p>Servidor funcionando.</p>`);
 });
 
 app.get("/api/status", async (req, res) => {
@@ -30,7 +22,6 @@ app.get("/api/status", async (req, res) => {
     await db.query("SELECT 1");
     res.json({ mensagem: "API e MySQL funcionando!" });
   } catch (erro) {
-    console.error(erro);
     res.status(500).json({ mensagem: "Erro ao conectar com o MySQL." });
   }
 });
@@ -52,11 +43,12 @@ async function registrarLog(req, acao, modulo, detalhes) {
 }
 
 // ==================================================
-// CRUD GENÉRICO COM LOGS
+// CRUD GENÉRICO COM LOGS E NOTIFICAÇÕES
 // ==================================================
 function registrarCRUD(nomeRota, nomeTabela, campos, campoObrigatorio) {
   console.log(`📌 Registrando rota: /api/${nomeRota}`);
 
+  // 1. LISTAR
   app.get(`/api/${nomeRota}`, async (req, res) => {
     try {
       const [rows] = await db.query(`SELECT * FROM ${nomeTabela} ORDER BY id DESC`);
@@ -67,6 +59,7 @@ function registrarCRUD(nomeRota, nomeTabela, campos, campoObrigatorio) {
     }
   });
 
+  // 2. CRIAR
   app.post(`/api/${nomeRota}`, async (req, res) => {
     try {
       if (campoObrigatorio && (!req.body[campoObrigatorio] || !String(req.body[campoObrigatorio]).trim())) {
@@ -86,16 +79,52 @@ function registrarCRUD(nomeRota, nomeTabela, campos, campoObrigatorio) {
     }
   });
 
+  // 3. EDITAR (COM DISPARO DE E-MAIL)
   app.put(`/api/${nomeRota}/:id`, async (req, res) => {
     try {
       const valores = campos.map(c => req.body[c] ?? null);
       const sets = campos.map(c => `${c} = ?`).join(", ");
+      
+      const [registroAntigo] = await db.query(`SELECT * FROM ${nomeTabela} WHERE id = ?`, [req.params.id]);
+      
       const [resultado] = await db.query(
         `UPDATE ${nomeTabela} SET ${sets} WHERE id = ?`,
         [...valores, req.params.id]
       );
+      
       if (resultado.affectedRows === 0) return res.status(404).json({ mensagem: "Não encontrado." });
+
       await registrarLog(req, 'Editou', nomeRota, `Registro ID ${req.params.id}`);
+
+      // Disparar e-mail para o cliente se o status mudou
+      if ((nomeRota === 'licencas' || nomeRota === 'protocolos') && req.body.status && registroAntigo.length > 0) {
+        const statusAntigo = registroAntigo[0].status;
+        const statusNovo = req.body.status;
+        
+        if (statusAntigo !== statusNovo) {
+          const clienteNome = req.body.cliente || 'Cliente';
+          const numeroRegistro = req.body.numero || req.params.id;
+
+          let emailCliente = process.env.EMAIL_DESTINO;
+          try {
+            const [clienteDB] = await db.query('SELECT email FROM clientes WHERE nome = ?', [clienteNome]);
+            if (clienteDB.length > 0 && clienteDB[0].email) {
+              emailCliente = clienteDB[0].email;
+            }
+          } catch (e) { console.log("Cliente não encontrado."); }
+
+          const assunto = `🔔 Atualização no seu processo: ${numeroRegistro}`;
+          const html = `<div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color: #1e5631;">Atualização de Status</h2>
+            <p>Olá, <strong>${clienteNome}</strong>!</p>
+            <p>Seu processo <strong>${numeroRegistro}</strong> mudou de <b>${statusAntigo}</b> para <b>${statusNovo}</b>.</p>
+          </div>`;
+          
+          await enviarEmail({ para: emailCliente, assunto, html });
+          console.log(`📧 E-mail enviado para ${clienteNome} (${emailCliente})`);
+        }
+      }
+
       res.json({ mensagem: "Atualizado!" });
     } catch (erro) {
       console.error(erro);
@@ -103,6 +132,7 @@ function registrarCRUD(nomeRota, nomeTabela, campos, campoObrigatorio) {
     }
   });
 
+  // 4. EXCLUIR
   app.delete(`/api/${nomeRota}/:id`, async (req, res) => {
     try {
       const [resultado] = await db.query(`DELETE FROM ${nomeTabela} WHERE id = ?`, [req.params.id]);
@@ -135,24 +165,16 @@ app.get('/api/logs', async (req, res) => {
   try {
     const [logs] = await db.query('SELECT * FROM logs ORDER BY created_at DESC LIMIT 100');
     res.json(logs);
-  } catch (erro) {
-    res.status(500).json({ mensagem: 'Erro ao buscar logs.' });
-  }
+  } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
 // ==================================================
-// VENCIMENTOS E E-MAIL
+// VENCIMENTOS, CONFIGURAÇÕES, USUÁRIOS E LOGIN
 // ==================================================
 app.get('/api/vencimentos', async (req, res) => {
   try {
     const dias = parseInt(req.query.dias) || 30;
-    const [licencas] = await db.query(`
-      SELECT * FROM licencas
-      WHERE vencimento IS NOT NULL
-      AND vencimento <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
-      ORDER BY vencimento ASC
-    `, [dias]);
-
+    const [licencas] = await db.query(`SELECT * FROM licencas WHERE vencimento IS NOT NULL AND vencimento <= DATE_ADD(CURDATE(), INTERVAL ? DAY) ORDER BY vencimento ASC`, [dias]);
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const comDias = licencas.map(l => {
       const venc = new Date(l.vencimento); venc.setHours(0, 0, 0, 0);
@@ -165,52 +187,29 @@ app.get('/api/vencimentos', async (req, res) => {
       return { ...l, diasRestantes, nivel };
     });
     res.json(comDias);
-  } catch (erro) {
-    res.status(500).json({ mensagem: 'Erro ao buscar vencimentos.' });
-  }
+  } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
 app.post('/api/enviar-alertas', async (req, res) => {
   try {
-    const [licencas] = await db.query(`
-      SELECT * FROM licencas
-      WHERE vencimento IS NOT NULL
-      AND vencimento <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
-      ORDER BY vencimento ASC
-    `);
-
+    const [licencas] = await db.query(`SELECT * FROM licencas WHERE vencimento IS NOT NULL AND vencimento <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) ORDER BY vencimento ASC`);
     if (licencas.length === 0) return res.json({ mensagem: 'Nenhuma licença vencendo.', enviados: 0 });
-
     let enviados = 0;
-    const erros = [];
     for (const licenca of licencas) {
       const resultado = await enviarAlertaVencimento(process.env.EMAIL_DESTINO, licenca);
       if (resultado.sucesso) enviados++;
-      else erros.push({ numero: licenca.numero, erro: resultado.erro });
     }
-
-    res.json({ mensagem: `${enviados} e-mail(s) enviado(s).`, total: licencas.length, enviados, erros: erros.length > 0 ? erros : undefined });
-  } catch (erro) {
-    res.status(500).json({ mensagem: 'Erro ao enviar alertas.' });
-  }
+    res.json({ mensagem: `${enviados} e-mail(s) enviado(s).`, total: licencas.length, enviados });
+  } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
 app.get('/api/testar-email', async (req, res) => {
   try {
-    const resultado = await enviarEmail({
-      para: process.env.EMAIL_DESTINO,
-      assunto: '🌿 Teste EcoGestão',
-      html: `<h2>✅ E-mail funcionando!</h2>`
-    });
+    const resultado = await enviarEmail({ para: process.env.EMAIL_DESTINO, assunto: 'Teste', html: `<h2>✅ Funcionando!</h2>` });
     res.json(resultado);
-  } catch (erro) {
-    res.status(500).json({ erro: erro.message });
-  }
+  } catch (erro) { res.status(500).json({ erro: erro.message }); }
 });
 
-// ==================================================
-// CONFIGURAÇÕES
-// ==================================================
 app.get('/api/configuracoes', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM configuracoes WHERE id = 1');
@@ -228,17 +227,12 @@ app.put('/api/configuracoes', async (req, res) => {
     const { nome_empresa, email, telefone, notificacoes_vencimento, dias_antecedencia } = req.body;
     const [existe] = await db.query('SELECT id FROM configuracoes WHERE id = 1');
     if (existe.length === 0) await db.query(`INSERT INTO configuracoes (id) VALUES (1)`);
-    await db.query(`
-      UPDATE configuracoes SET nome_empresa = ?, email = ?, telefone = ?, notificacoes_vencimento = ?, dias_antecedencia = ? WHERE id = 1
-    `, [nome_empresa || 'EcoGestão', email || null, telefone || null, notificacoes_vencimento ? 1 : 0, parseInt(dias_antecedencia) || 30]);
+    await db.query(`UPDATE configuracoes SET nome_empresa = ?, email = ?, telefone = ?, notificacoes_vencimento = ?, dias_antecedencia = ? WHERE id = 1`, [nome_empresa || 'EcoGestão', email || null, telefone || null, notificacoes_vencimento ? 1 : 0, parseInt(dias_antecedencia) || 30]);
     const [atualizado] = await db.query('SELECT * FROM configuracoes WHERE id = 1');
     res.json({ mensagem: 'Configurações salvas!', dados: atualizado[0] });
-  } catch (erro) { res.status(500).json({ mensagem: 'Erro ao salvar configurações.' }); }
+  } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
-// ==================================================
-// USUÁRIOS
-// ==================================================
 app.get('/api/usuarios', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT id, nome, email, cpf, cargo, telefone, ativo, created_at FROM usuarios ORDER BY id ASC');
@@ -249,7 +243,7 @@ app.get('/api/usuarios', async (req, res) => {
 app.get('/api/usuarios/:id', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT id, nome, email, cpf, cargo, telefone, ativo, created_at FROM usuarios WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ mensagem: 'Usuário não encontrado.' });
+    if (rows.length === 0) return res.status(404).json({ mensagem: 'Não encontrado.' });
     res.json(rows[0]);
   } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
@@ -259,12 +253,9 @@ app.post('/api/usuarios', async (req, res) => {
     const { nome, email, cpf, cargo, telefone, senha, ativo } = req.body;
     if (!nome || !email) return res.status(400).json({ mensagem: 'Nome e email são obrigatórios.' });
     const senhaCriptografada = await bcrypt.hash(senha || '123456', 10);
-    const [resultado] = await db.query(
-      `INSERT INTO usuarios (nome, email, cpf, cargo, telefone, senha, ativo) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [nome, email, cpf || null, cargo || 'Usuário', telefone || null, senhaCriptografada, ativo ? 1 : 1]
-    );
-    res.status(201).json({ mensagem: 'Usuário cadastrado!', id: resultado.insertId });
-  } catch (erro) { res.status(500).json({ mensagem: 'Erro ao cadastrar usuário.' }); }
+    const [resultado] = await db.query(`INSERT INTO usuarios (nome, email, cpf, cargo, telefone, senha, ativo) VALUES (?, ?, ?, ?, ?, ?, ?)`, [nome, email, cpf || null, cargo || 'Usuário', telefone || null, senhaCriptografada, ativo ? 1 : 1]);
+    res.status(201).json({ mensagem: 'Cadastrado!', id: resultado.insertId });
+  } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
 app.put('/api/usuarios/:id', async (req, res) => {
@@ -278,17 +269,17 @@ app.put('/api/usuarios/:id', async (req, res) => {
       params = [nome, email, cpf || null, cargo || 'Usuário', telefone || null, ativo ? 1 : 0, senhaCriptografada, req.params.id];
     }
     const [resultado] = await db.query(query, params);
-    if (resultado.affectedRows === 0) return res.status(404).json({ mensagem: 'Usuário não encontrado.' });
-    res.json({ mensagem: 'Usuário atualizado!' });
-  } catch (erro) { res.status(500).json({ mensagem: 'Erro ao atualizar usuário.' }); }
+    if (resultado.affectedRows === 0) return res.status(404).json({ mensagem: 'Não encontrado.' });
+    res.json({ mensagem: 'Atualizado!' });
+  } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
 app.delete('/api/usuarios/:id', async (req, res) => {
   try {
     const [resultado] = await db.query('DELETE FROM usuarios WHERE id = ?', [req.params.id]);
-    if (resultado.affectedRows === 0) return res.status(404).json({ mensagem: 'Usuário não encontrado.' });
-    res.json({ mensagem: 'Usuário excluído!' });
-  } catch (erro) { res.status(500).json({ mensagem: 'Erro ao excluir usuário.' }); }
+    if (resultado.affectedRows === 0) return res.status(404).json({ mensagem: 'Não encontrado.' });
+    res.json({ mensagem: 'Excluído!' });
+  } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
 app.get('/api/usuarios/:id/permissoes', async (req, res) => {
@@ -304,61 +295,49 @@ app.put('/api/usuarios/:id/permissoes', async (req, res) => {
     const lista = req.body.permissoes || [];
     await db.query('DELETE FROM permissoes WHERE usuario_id = ?', [usuarioId]);
     for (const p of lista) {
-      await db.query(
-        `INSERT INTO permissoes (usuario_id, funcionalidade, pode_criar, pode_visualizar, pode_editar, pode_excluir) VALUES (?, ?, ?, ?, ?, ?)`,
-        [usuarioId, p.funcionalidade, p.pode_criar ? 1 : 0, p.pode_visualizar ? 1 : 0, p.pode_editar ? 1 : 0, p.pode_excluir ? 1 : 0]
-      );
+      await db.query(`INSERT INTO permissoes (usuario_id, funcionalidade, pode_criar, pode_visualizar, pode_editar, pode_excluir) VALUES (?, ?, ?, ?, ?, ?)`, [usuarioId, p.funcionalidade, p.pode_criar ? 1 : 0, p.pode_visualizar ? 1 : 0, p.pode_editar ? 1 : 0, p.pode_excluir ? 1 : 0]);
     }
-    res.json({ mensagem: 'Permissões salvas!' });
+    res.json({ mensagem: 'Salvo!' });
   } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
-// ==================================================
-// LOGIN E SENHA
-// ==================================================
 app.post('/api/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
-    if (!email || !senha) return res.status(400).json({ mensagem: 'E-mail e senha são obrigatórios.' });
+    if (!email || !senha) return res.status(400).json({ mensagem: 'Obrigatório.' });
     const [usuarios] = await db.query('SELECT * FROM usuarios WHERE email = ?', [email]);
-    if (usuarios.length === 0) return res.status(401).json({ mensagem: 'E-mail ou senha incorretos.' });
+    if (usuarios.length === 0) return res.status(401).json({ mensagem: 'Incorreto.' });
     const usuario = usuarios[0];
     const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
-    if (!senhaCorreta) return res.status(401).json({ mensagem: 'E-mail ou senha incorretos.' });
-    if (!usuario.ativo) return res.status(403).json({ mensagem: 'Usuário inativo.' });
+    if (!senhaCorreta) return res.status(401).json({ mensagem: 'Incorreto.' });
+    if (!usuario.ativo) return res.status(403).json({ mensagem: 'Inativo.' });
     const [permissoesLista] = await db.query('SELECT * FROM permissoes WHERE usuario_id = ?', [usuario.id]);
     const permissoes = {};
     permissoesLista.forEach(p => {
-      permissoes[p.funcionalidade] = {
-        pode_criar: !!p.pode_criar, pode_visualizar: !!p.pode_visualizar,
-        pode_editar: !!p.pode_editar, pode_excluir: !!p.pode_excluir
-      };
+      permissoes[p.funcionalidade] = { pode_criar: !!p.pode_criar, pode_visualizar: !!p.pode_visualizar, pode_editar: !!p.pode_editar, pode_excluir: !!p.pode_excluir };
     });
     delete usuario.senha;
-    res.json({ mensagem: 'Login realizado com sucesso!', usuario, permissoes });
-  } catch (erro) { res.status(500).json({ mensagem: 'Erro no servidor.' }); }
+    res.json({ mensagem: 'Sucesso!', usuario, permissoes });
+  } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
 app.put('/api/usuarios/:id/senha', async (req, res) => {
   try {
     const { id } = req.params;
     const { senhaAtual, novaSenha } = req.body;
-    if (!senhaAtual || !novaSenha) return res.status(400).json({ mensagem: 'Senhas obrigatórias.' });
-    if (novaSenha.length < 6) return res.status(400).json({ mensagem: 'A nova senha deve ter 6 caracteres.' });
+    if (!senhaAtual || !novaSenha) return res.status(400).json({ mensagem: 'Obrigatório.' });
+    if (novaSenha.length < 6) return res.status(400).json({ mensagem: '6 caracteres.' });
     const [usuarios] = await db.query('SELECT * FROM usuarios WHERE id = ?', [id]);
-    if (usuarios.length === 0) return res.status(404).json({ mensagem: 'Usuário não encontrado.' });
+    if (usuarios.length === 0) return res.status(404).json({ mensagem: 'Não encontrado.' });
     const usuario = usuarios[0];
     const senhaCorreta = await bcrypt.compare(senhaAtual, usuario.senha);
     if (!senhaCorreta) return res.status(401).json({ mensagem: 'Senha atual incorreta.' });
     const novaSenhaCriptografada = await bcrypt.hash(novaSenha, 10);
     await db.query('UPDATE usuarios SET senha = ? WHERE id = ?', [novaSenhaCriptografada, id]);
-    res.json({ mensagem: 'Senha alterada com sucesso!' });
+    res.json({ mensagem: 'Sucesso!' });
   } catch (erro) { res.status(500).json({ mensagem: 'Erro.' }); }
 });
 
-// ==================================================
-// INICIAR SERVIDOR
-// ==================================================
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);

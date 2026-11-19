@@ -783,3 +783,32 @@ body.dark-mode ::selection {
   background: #4ade80;
   color: #0f172a;
 }
+
+/* Corrige a cor do select no modo escuro */
+body.dark-mode select {
+  background-color: #1e1e24 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid #3a3a44 !important;
+}
+
+body.dark-mode select option {
+  background-color: #1e1e24 !important;
+  color: #f1f5f9 !important;
+}
+
+/* Se o select estiver dentro de um panel-header, ajusta o fundo */
+.panel-header select {
+  background: #fafbfc;
+  color: #1a202c;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+body.dark-mode .panel-header select {
+  background: #26262d !important;
+  color: #f1f5f9 !important;
+  border-color: #3a3a44 !important;
+}

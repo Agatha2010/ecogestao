@@ -5,7 +5,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { exportarParaCSV } from '../utils/exportar';
 import { exportarParaPDF } from '../utils/exportarPDF';
 
-const FORM_VAZIO = { numero: '', cliente: '', orgao: '', emissao: '', vencimento: '', descricao: '', status: 'Ativo' };
+const FORM_VAZIO = { 
+  numero: '', 
+  cliente: '', 
+  orgao: '', 
+  emissao: '', 
+  vencimento: '', 
+  descricao: '', 
+  status: 'Ativo' 
+};
 
 export default function Licencas() {
   const { pode } = useAuth();
@@ -37,23 +45,62 @@ export default function Licencas() {
   }, [searchParams, podeCriar]);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editandoId) await api.licencas.atualizar(editandoId, form);
-    else await api.licencas.criar(form);
-    setForm(FORM_VAZIO); setEditandoId(null); setMostrarForm(false); carregar();
+    try {
+      // Limpa campos vazios para não dar erro no banco
+      const dadosParaSalvar = {
+        numero: form.numero || null,
+        cliente: form.cliente || null,
+        orgao: form.orgao || null,
+        emissao: form.emissao || null,
+        vencimento: form.vencimento || null,
+        descricao: form.descricao || null,
+        status: form.status || 'Ativo'
+      };
+
+      if (editandoId) {
+        await api.licencas.atualizar(editandoId, dadosParaSalvar);
+      } else {
+        await api.licencas.criar(dadosParaSalvar);
+      }
+      
+      setForm(FORM_VAZIO); 
+      setEditandoId(null); 
+      setMostrarForm(false); 
+      carregar();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar licença. Verifique o console.');
+    }
   };
+
   const handleEditar = (l) => {
     setForm({
-      numero: l.numero || '', cliente: l.cliente || '', orgao: l.orgao || '',
+      numero: l.numero || '', 
+      cliente: l.cliente || '', 
+      orgao: l.orgao || '',
       emissao: l.emissao ? l.emissao.substring(0, 10) : '',
       vencimento: l.vencimento ? l.vencimento.substring(0, 10) : '',
-      descricao: l.descricao || '', status: l.status || 'Ativo'
+      descricao: l.descricao || '', 
+      status: l.status || 'Ativo'
     });
-    setEditandoId(l.id); setMostrarForm(true);
+    setEditandoId(l.id); 
+    setMostrarForm(true);
   };
-  const handleExcluir = async (id) => { if (window.confirm('Excluir?')) { await api.licencas.excluir(id); carregar(); } };
-  const handleCancelar = () => { setForm(FORM_VAZIO); setEditandoId(null); setMostrarForm(false); };
+
+  const handleExcluir = async (id) => {
+    if (!window.confirm('Excluir esta licença?')) return;
+    await api.licencas.excluir(id); 
+    carregar();
+  };
+
+  const handleCancelar = () => { 
+    setForm(FORM_VAZIO); 
+    setEditandoId(null); 
+    setMostrarForm(false); 
+  };
 
   const limparFiltros = () => {
     setFiltroBusca('');
@@ -63,6 +110,7 @@ export default function Licencas() {
 
   const formatarData = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '-');
   const diasRestantes = (v) => { if (!v) return null; return Math.ceil((new Date(v) - new Date()) / (1000 * 60 * 60 * 24)); };
+  
   const getStatusPill = (v) => {
     const dias = diasRestantes(v);
     if (dias === null) return 'status-normal';
@@ -92,11 +140,7 @@ export default function Licencas() {
   const gerarPDF = () => {
     const colunas = ['Número', 'Cliente', 'Órgão', 'Vencimento', 'Status'];
     const dados = itensFiltrados.map(l => [
-      l.numero || '-',
-      l.cliente || '-',
-      l.orgao || '-',
-      formatarData(l.vencimento),
-      l.status || '-'
+      l.numero || '-', l.cliente || '-', l.orgao || '-', formatarData(l.vencimento), l.status || '-'
     ]);
     exportarParaPDF('Relatório de Licenças Ambientais', colunas, dados, 'licencas');
   };
@@ -108,7 +152,6 @@ export default function Licencas() {
           <h1>Licenças Ambientais</h1>
           <p className="subtitulo">Gerencie todas as licenças dos seus clientes.</p>
         </div>
-        
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn btn-secondary" onClick={() => exportarParaCSV(itensFiltrados, 'licencas')}>📥 CSV</button>
           <button className="btn" onClick={gerarPDF} style={{ background: '#dc2626', color: '#fff', border: 'none' }}>📄 PDF</button>
@@ -126,7 +169,7 @@ export default function Licencas() {
           <div className="form-grid">
             <div className="form-group"><label>Número *</label><input name="numero" value={form.numero} onChange={handleChange} required /></div>
             <div className="form-group"><label>Cliente</label><input name="cliente" value={form.cliente} onChange={handleChange} /></div>
-            <div className="form-group"><label>Órgão Emissor</label><input name="orgao" value={form.orgao} onChange={handleChange} /></div>
+            <div className="form-group"><label>Órgão Emissor</label><input name="orgao" value={form.orgao} onChange={handleChange} placeholder="IBAMA, CETESB..." /></div>
             <div className="form-group"><label>Emissão</label><input type="date" name="emissao" value={form.emissao} onChange={handleChange} /></div>
             <div className="form-group"><label>Vencimento</label><input type="date" name="vencimento" value={form.vencimento} onChange={handleChange} /></div>
             <div className="form-group"><label>Status</label>
@@ -186,8 +229,16 @@ export default function Licencas() {
                   {(podeEditar || podeExcluir) && (
                     <td>
                       <div className="acoes-cell">
-                        {podeEditar && (<button className="btn-icon" onClick={() => handleEditar(l)} title="Editar"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>)}
-                        {podeExcluir && (<button className="btn-icon danger" onClick={() => handleExcluir(l.id)} title="Excluir"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>)}
+                        {podeEditar && (
+                          <button className="btn-icon" onClick={() => handleEditar(l)} title="Editar">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                          </button>
+                        )}
+                        {podeExcluir && (
+                          <button className="btn-icon danger" onClick={() => handleExcluir(l.id)} title="Excluir">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                          </button>
+                        )}
                       </div>
                     </td>
                   )}
